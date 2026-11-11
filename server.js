@@ -10,8 +10,9 @@ const { WebSocketServer } = require("ws");
 
 const PORT = process.env.PORT || 3000;
 const RANGES = [8, 16, 24, 32, 40, 48, 56, 64]; // ต้องตรงกับ addon
-const POS_INTERVAL = 250;    // ms ดึงตำแหน่ง
-const ROSTER_INTERVAL = 1000; // ms ดึงชื่อ/สถานะไมค์
+const POS_INTERVAL = 500;     // ms ดึงตำแหน่ง
+const ROSTER_INTERVAL = 2000; // ms ดึงชื่อ/สถานะไมค์
+const NOPOLL = !!process.env.NOPOLL; // NOPOLL=1 npm start = ต่ออย่างเดียว ไม่ส่งคำสั่งใดๆ (ไว้ทดสอบ)
 const PUBLIC = path.join(__dirname, "public");
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css" };
 
@@ -63,6 +64,7 @@ mcWss.on("connection", (mc) => {
     return b.statusCode === 0 && Array.isArray(b.victim) ? b.victim : [];
   };
 
+  // ผู้เล่นพิมพ์ !link ในแชต -> สร้างรหัส 6 หลัก แล้วส่งกลับให้เฉพาะคนนั้น
   function giveCode(name) {
     if (!name) return;
     for (const [c, v] of codes) if (v.name === name || v.exp < Date.now()) codes.delete(c);
@@ -74,7 +76,8 @@ mcWss.on("connection", (mc) => {
     console.log(`[link] ${name} -> ${code}`);
   }
 
-  mc.send(JSON.stringify({
+  // สมัครรับเหตุการณ์แชต
+  if (!NOPOLL) mc.send(JSON.stringify({
     header: { version: 1, requestId: randomUUID(), messageType: "commandRequest", messagePurpose: "subscribe" },
     body: { eventName: "PlayerMessage" },
   }));
@@ -82,6 +85,7 @@ mcWss.on("connection", (mc) => {
   mc.on("message", (raw) => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     const h = m.header || {};
+    if (process.env.DEBUG) console.log("[MC<-]", String(raw).slice(0, 300));
     if (h.eventName === "PlayerMessage") {
       const b = m.body || {};
       if (b.type === "chat" && String(b.message).trim().toLowerCase() === "!link") giveCode(b.sender);
@@ -92,14 +96,13 @@ mcWss.on("connection", (mc) => {
   });
 
   async function pollRoster() {
-    const [all, onList, ...rangeLists] = await Promise.all([
-      victims("testfor @a"),
-      victims("testfor @a[tag=mic_on]"),
-      ...RANGES.map((r) => victims(`testfor @a[tag=micr_${r}]`)),
-    ]);
+    const all = await victims("testfor @a");
+    const onList = await victims("testfor @a[tag=mic_on]");
     const onSet = new Set(onList);
     const rangeOf = {};
-    RANGES.forEach((r, i) => rangeLists[i].forEach((n) => (rangeOf[n] = r)));
+    if (onSet.size > 0) {
+      for (const r of RANGES) for (const n of await victims(`testfor @a[tag=micr_${r}]`)) rangeOf[n] = r;
+    }
     const next = {};
     for (const name of all) {
       next[name] = { ...(players[name] || { x: 0, y: 0, z: 0, yaw: 0, dim: 0 }), on: onSet.has(name), range: rangeOf[name] || 16 };
@@ -108,32 +111,42 @@ mcWss.on("connection", (mc) => {
   }
 
   async function pollPositions() {
-    await Promise.all(Object.keys(players).map(async (name) => {
+    for (const name of Object.keys(players)) {
       const safe = name.replace(/"/g, "");
       const b = await ask(`querytarget @a[name="${safe}"]`);
-      if (b.statusCode !== 0 || !b.details) return;
+      if (b.statusCode !== 0 || !b.details) continue;
       try {
         const d = JSON.parse(b.details)[0];
         if (d && players[name]) {
           Object.assign(players[name], { x: d.position.x, y: d.position.y, z: d.position.z, yaw: d.yRot || 0, dim: d.dimension || 0 });
         }
       } catch {}
-    }));
+    }
   }
 
-  const t1 = setInterval(() => pollRoster().catch(() => {}), ROSTER_INTERVAL);
-  const t2 = setInterval(() => pollPositions().catch(() => {}), POS_INTERVAL);
-  pollRoster().catch(() => {});
+  let busy1 = false, busy2 = false;
+  const t1 = NOPOLL ? null : setInterval(async () => {
+    if (busy1) return; busy1 = true;
+    try { await pollRoster(); } catch (e) { console.log("[roster]", e.message); }
+    busy1 = false;
+  }, ROSTER_INTERVAL);
+  const t2 = NOPOLL ? null : setInterval(async () => {
+    if (busy2) return; busy2 = true;
+    try { await pollPositions(); } catch (e) { console.log("[pos]", e.message); }
+    busy2 = false;
+  }, POS_INTERVAL);
+  if (NOPOLL) console.log("[MC] NOPOLL: ไม่ส่งคำสั่งใดๆ ไปที่เกม");
 
-  mc.on("close", () => {
-    console.log("[MC] disconnected");
-    clearInterval(t1); clearInterval(t2);
+  mc.on("error", (e) => console.log("[MC] error", e.message));
+  mc.on("close", (code) => {
+    console.log("[MC] disconnected code=" + code);
+    if (t1) clearInterval(t1); if (t2) clearInterval(t2);
     mcOnline = false; players = {};
   });
 });
 
 // ---------- เว็บ (signaling + ส่งสถานะ) ----------
-const clients = new Map();
+const clients = new Map(); // ws -> { id, name }
 const sendTo = (ws, obj) => ws.readyState === 1 && ws.send(JSON.stringify(obj));
 
 webWss.on("connection", (ws) => {
@@ -152,6 +165,7 @@ webWss.on("connection", (ws) => {
         if (c && c.exp > Date.now()) { name = c.name; codes.delete(key); token = randomUUID(); sessions.set(token, name); }
       }
       if (!name) return sendTo(ws, { type: "join-error", reason: "รหัสไม่ถูกต้องหรือหมดอายุ พิมพ์ !link ในแชตเกมเพื่อรับรหัสใหม่" });
+      // ถ้าชื่อนี้ต่ออยู่แล้ว (เช่น แท็บเก่า) ให้ตัดแท็บเก่าออก
       for (const [other, c] of clients) if (c !== me && c.name === name) other.close();
       me.name = name;
       const peers = [...clients.values()].filter((c) => c !== me && c.name && c.name !== name).map((c) => ({ id: c.id, name: c.name }));
