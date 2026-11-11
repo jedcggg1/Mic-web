@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proximity Mic</title>
+<style>
+  :root {
+    --sea: #0e2830;
+    --deep: #0a1d23;
+    --panel: #153640;
+    --line: #25505c;
+    --text: #e8f0ee;
+    --muted: #84a9ad;
+    --amber: #f4b942;
+    --coral: #ef6f5e;
+    --font: "Noto Sans Thai", "Sarabun", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--deep); color: var(--text); font-family: var(--font); }
+  body { min-height: 100vh; display: grid; place-items: start center; padding: 20px 14px 40px; }
+  main { width: min(960px, 100%); display: grid; gap: 18px; grid-template-columns: 1fr; }
+  @media (min-width: 820px) { main { grid-template-columns: 1.1fr 1fr; align-items: start; } header { grid-column: 1 / -1; } }
+  header h1 { margin: 0; font-size: 1.7rem; font-weight: 700; letter-spacing: .01em; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: .95rem; }
+  .status { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: .9rem; color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--coral); }
+  .dot.ok { background: #6fd08c; }
+  .radar-wrap { background: var(--sea); border: 1px solid var(--line); border-radius: 14px; padding: 10px; }
+  canvas { width: 100%; aspect-ratio: 1; display: block; border-radius: 8px; }
+  .side { display: grid; gap: 16px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .box h2 { margin: 0 0 10px; font-size: 1rem; font-weight: 600; }
+  label { font-size: .88rem; color: var(--muted); display: block; margin-bottom: 6px; }
+  .row { display: flex; gap: 8px; }
+  input[type=text] { flex: 1; min-width: 0; background: var(--deep); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 10px 12px; font: inherit; }
+  button { background: var(--amber); color: #2a1d00; border: 0; border-radius: 8px; padding: 10px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip { background: var(--deep); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 4px 12px; font-size: .85rem; font-weight: 500; }
+  .err { color: var(--coral); font-size: .88rem; margin-top: 8px; min-height: 1.2em; }
+  .me-state { display: flex; align-items: center; gap: 12px; }
+  .me-state .big { font-size: 1.3rem; font-weight: 700; }
+  .me-state small { color: var(--muted); display: block; font-weight: 400; font-size: .85rem; }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+  li:first-child { border-top: 0; }
+  li .n { font-weight: 600; }
+  li .m { color: var(--muted); font-size: .85rem; text-align: right; }
+  li .bar { grid-column: 1 / -1; height: 4px; background: var(--deep); border-radius: 2px; overflow: hidden; }
+  li .bar i { display: block; height: 100%; width: 0; background: var(--amber); }
+  li.muted .n { color: var(--muted); }
+  .empty { color: var(--muted); font-size: .9rem; }
+  .hint { color: var(--muted); font-size: .82rem; line-height: 1.5; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Proximity Mic</h1>
+    <p>เสียงเบา-ดังตามระยะในเกม เปิด/ปิดไมค์และปรับวงด้วยไอเท็มไมโครโฟน</p>
+    <div class="status"><span class="dot" id="srvDot"></span><span id="srvText">กำลังเชื่อมต่อเซิร์ฟเวอร์…</span></div>
+  </header>
+  <section class="radar-wrap" aria-label="แผนที่ระยะเสียง">
+    <canvas id="radar" width="640" height="640"></canvas>
+  </section>
+  <div class="side">
+    <section class="box" id="joinBox">
+      <h2>เข้าร่วมห้องเสียง</h2>
+      <label for="code">พิมพ์ !link ในแชตเกม แล้วนำรหัส 6 หลักมากรอกที่นี่</label>
+      <div class="row">
+        <input type="text" id="code" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="รหัส 6 หลัก">
+        <button id="joinBtn">เข้าร่วม</button>
+      </div>
+      <div class="err" id="err"></div>
+      <p class="hint">เบราว์เซอร์จะขอสิทธิ์ใช้ไมค์ ต้องเปิดผ่าน https หรือ localhost เท่านั้น</p>
+    </section>
+    <section class="box hidden" id="meBox">
+      <h2>ไมค์ของคุณ</h2>
+      <div class="me-state"><div class="big" id="meText">—</div></div>
+      <p class="hint">กดไอเท็มไมโครโฟนในเกมเพื่อเปิด/ปิดและปรับวงไมค์</p>
+    </section>
+    <section class="box">
+      <h2>ผู้เล่นในเกม</h2>
+      <ul id="list"></ul>
+      <div class="empty" id="empty">ยังไม่มีผู้เล่น — โฮสต์ต้องพิมพ์ /connect ในเกม</div>
+    </section>
+  </div>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const ICE = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+  let ws, state = { mcOnline: false, players: {} };
+  let myName = null, myId = null, token = null, stream = null, ctx = null;
+  const peers = new Map();
+  function wsUrl() {
+    const qs = new URLSearchParams(location.search);
+    let server = qs.get("server") || "";
+    try {
+      if (server) localStorage.setItem("mic_server", server);
+      else server = localStorage.getItem("mic_server") || "";
+    } catch {}
+    if (!server) return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/web`;
+    server = server.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
+    if (!/^wss?:\/\//.test(server)) server = "wss://" + server;
+    return server.replace(/\/+$/, "") + "/web";
+  }
+  function connect() {
+    ws = new WebSocket(wsUrl());
+    ws.onopen = () => { setSrv(true); if (token) ws.send(JSON.stringify({ type: "join", resume: token })); };
+    ws.onclose = () => { setSrv(false); setTimeout(connect, 2000); };
+    ws.onmessage = (e) => onMsg(JSON.parse(e.data));
+  }
+  function setSrv(ok) {
+    $("srvDot").className = "dot" + (ok && state.mcOnline ? " ok" : "");
+    $("srvText").textContent = !ok ? "ต่อเซิร์ฟเวอร์ไม่ได้ กำลังลองใหม่…"
+      : state.mcOnline ? "เชื่อมกับ Minecraft แล้ว" : "เซิร์ฟเวอร์พร้อม แต่ Minecraft ยังไม่ได้ /connect";
+  }
+  async function onMsg(m) {
+    if (m.type === "state") { state = m; setSrv(true); render(); applyAudio(); }
+    else if (m.type === "join-error") {
+      $("err").textContent = m.reason; myName = null; token = null;
+      $("joinBox").classList.remove("hidden"); $("meBox").classList.add("hidden");
+    }
+    else if (m.type === "welcome") {
+      myId = m.id; myName = m.name; token = m.token;
+      peers.forEach((p) => p.pc.close()); peers.clear();
+      $("joinBox").classList.add("hidden"); $("meBox").classList.remove("hidden");
+      for (const p of m.peers) await callPeer(p.id, p.name);
+    }
+    else if (m.type === "peer-joined") makePeer(m.id, m.name);
+    else if (m.type === "peer-left") dropPeer(m.id);
+    else if (m.type === "signal") await onSignal(m.from, m.data);
+  }
+  $("joinBtn").onclick = async () => {
+    const code = $("code").value.trim();
+    if (!/^\d{6}$/.test(code)) { $("err").textContent = "ใส่รหัส 6 หลักที่ได้จากเกม"; return; }
+    $("err").textContent = "";
+    if (!stream) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false,
+        });
+      } catch (e) { $("err").textContent = "เปิดไมค์ไม่ได้: อนุญาตสิทธิ์ไมค์ และใช้ https หรือ localhost"; return; }
+    }
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    await ctx.resume();
+    ws.send(JSON.stringify({ type: "join", code }));
+  };
+  function makePeer(id, name) {
+    if (peers.has(id)) return peers.get(id);
+    const pc = new RTCPeerConnection(ICE);
+    const peer = { id, name, pc, gain: null, panner: null, an: null, buf: new Uint8Array(128), level: 0 };
+    peers.set(id, peer);
+    if (stream) stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+    pc.onicecandidate = (e) => e.candidate && sig(id, { candidate: e.candidate });
+    pc.ontrack = (e) => {
+      const s = e.streams[0];
+      const keep = new Audio(); keep.srcObject = s; keep.muted = true;
+      const src = ctx.createMediaStreamSource(s);
+      const gain = ctx.createGain(); gain.gain.value = 0;
+      const panner = ctx.createPanner();
+      panner.panningModel = "HRTF"; panner.distanceModel = "linear";
+      panner.refDistance = 1; panner.rolloffFactor = 1; panner.maxDistance = 16;
+      const an = ctx.createAnalyser(); an.fftSize = 256;
+      src.connect(an); src.connect(gain); gain.connect(panner); panner.connect(ctx.destination);
+      Object.assign(peer, { gain, panner, an });
+    };
+    return peer;
+  }
+  async function callPeer(id, name) {
+    const peer = makePeer(id, name);
+    const offer = await peer.pc.createOffer({ offerToReceiveAudio: true });
+    await peer.pc.setLocalDescription(offer);
+    sig(id, { description: peer.pc.localDescription });
+  }
+  async function onSignal(from, data) {
+    const peer = peers.get(from);
+    if (!peer) return;
+    const pc = peer.pc;
+    if (data.description) {
+      await pc.setRemoteDescription(data.description);
+      if (data.description.type === "offer") {
+        const ans = await pc.createAnswer();
+        await pc.setLocalDescription(ans);
+        sig(from, { description: pc.localDescription });
+      }
+    } else if (data.candidate) {
+      try { await pc.addIceCandidate(data.candidate); } catch {}
+    }
+  }
+  const sig = (to, data) => ws.send(JSON.stringify({ type: "signal", to, data }));
+  function dropPeer(id) { const p = peers.get(id); if (p) { p.pc.close(); peers.delete(id); } }
+  const setP = (param, v) => param.setTargetAtTime(v, ctx.currentTime, 0.05);
+  function applyAudio() {
+    if (!ctx || !myName) return;
+    const me = state.players[myName];
+    if (stream) stream.getAudioTracks().forEach((t) => (t.enabled = !!(me && me.on)));
+    if (me) {
+      const L = ctx.listener, yaw = (me.yaw * Math.PI) / 180;
+      const fx = -Math.sin(yaw), fz = Math.cos(yaw);
+      if (L.positionX) {
+        setP(L.positionX, me.x); setP(L.positionY, me.y + 1.6); setP(L.positionZ, me.z);
+        setP(L.forwardX, fx); setP(L.forwardY, 0); setP(L.forwardZ, fz);
+        setP(L.upX, 0); setP(L.upY, 1); setP(L.upZ, 0);
+      } else { L.setPosition(me.x, me.y + 1.6, me.z); L.setOrientation(fx, 0, fz, 0, 1, 0); }
+    }
+    for (const peer of peers.values()) {
+      if (!peer.gain) continue;
+      const p = state.players[peer.name];
+      const audible = me && p && p.on && p.dim === me.dim;
+      setP(peer.gain.gain, audible ? 1 : 0);
+      if (p) {
+        peer.panner.maxDistance = p.range;
+        setP(peer.panner.positionX, p.x); setP(peer.panner.positionY, p.y + 1.6); setP(peer.panner.positionZ, p.z);
+      }
+    }
+  }
+  function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z); }
+  function render() {
+    const names = Object.keys(state.players);
+    const me = myName && state.players[myName];
+    $("empty").classList.toggle("hidden", names.length > 0);
+    const ul = $("list"); ul.innerHTML = "";
+    names.forEach((n) => {
+      const p = state.players[n];
+      const li = document.createElement("li");
+      if (!p.on) li.className = "muted";
+      const d = me && n !== myName ? ` · ห่าง ${distance(me, p).toFixed(0)} บล็อก` : "";
+      li.innerHTML = `<span class="n"></span><span class="m"></span><div class="bar"><i data-n="${encodeURIComponent(n)}"></i></div>`;
+      li.querySelector(".n").textContent = (n === myName ? "คุณ · " : "") + n;
+      li.querySelector(".m").textContent = (p.on ? `ไมค์เปิด ${p.range} บล็อก` : "ไมค์ปิด") + d;
+      ul.appendChild(li);
+    });
+    if (myName) $("meText").textContent = me ? (me.on ? `เปิดไมค์ · วง ${me.range} บล็อก` : "ปิดไมค์") : "ไม่พบคุณในเกม";
+  }
+  const cv = $("radar"), g = cv.getContext("2d");
+  const VIEW = 72;
+  function frame() {
+    for (const peer of peers.values()) {
+      if (!peer.an) continue;
+      peer.an.getByteTimeDomainData(peer.buf);
+      let max = 0; for (const v of peer.buf) max = Math.max(max, Math.abs(v - 128));
+      peer.level = peer.level * 0.8 + (max / 128) * 0.2;
+    }
+    document.querySelectorAll("li .bar i").forEach((el) => {
+      const n = decodeURIComponent(el.dataset.n);
+      const peer = [...peers.values()].find((p) => p.name === n);
+      const audible = peer && state.players[n] && state.players[n].on;
+      el.style.width = audible ? Math.min(100, peer.level * 300) + "%" : "0";
+    });
+    drawRadar();
+    requestAnimationFrame(frame);
+  }
+  function drawRadar() {
+    const W = cv.width, c = W / 2, R = c - 14, k = R / VIEW;
+    g.clearRect(0, 0, W, W);
+    g.fillStyle = "#0e2830"; g.fillRect(0, 0, W, W);
+    g.font = "20px sans-serif"; g.textAlign = "center";
+    g.strokeStyle = "#25505c"; g.lineWidth = 1.5; g.fillStyle = "#84a9ad";
+    [16, 32, 48, 64].forEach((r) => {
+      g.beginPath(); g.arc(c, c, r * k, 0, 7); g.stroke();
+      g.fillText(r, c, c - r * k - 5);
+    });
+    g.beginPath(); g.moveTo(c, c - R); g.lineTo(c, c + R); g.moveTo(c - R, c); g.lineTo(c + R, c); g.stroke();
+    const me = myName && state.players[myName];
+    if (!me) {
+      g.fillStyle = "#84a9ad"; g.font = "22px sans-serif";
+      g.fillText(myName ? "ไม่พบคุณในเกม" : "เข้าร่วมเพื่อดูแผนที่", c, c + 8);
+      return;
+    }
+    g.fillStyle = "rgba(244,185,66,.07)"; g.strokeStyle = "rgba(244,185,66,.55)"; g.setLineDash([8, 6]);
+    g.beginPath(); g.arc(c, c, Math.min(me.range * k, R), 0, 7); g.fill(); g.stroke(); g.setLineDash([]);
+    for (const [n, p] of Object.entries(state.players)) {
+      if (n === myName || p.dim !== me.dim) continue;
+      let dx = (p.x - me.x) * k, dz = (p.z - me.z) * k;
+      const len = Math.hypot(dx, dz);
+      if (len > R) { dx *= R / len; dz *= R / len; }
+      const dist = distance(me, p);
+      const heard = p.on && dist < p.range;
+      const peer = [...peers.values()].find((q) => q.name === n);
+      const talk = heard && peer ? Math.min(1, peer.level * 4) : 0;
+      if (p.on) {
+        g.strokeStyle = heard ? "rgba(244,185,66,.5)" : "rgba(132,169,173,.35)"; g.lineWidth = 1.5;
+        g.beginPath(); g.arc(c + dx, c + dz, Math.min(p.range * k, R), 0, 7); g.stroke();
+      }
+      g.fillStyle = heard ? "#f4b942" : "#5d8187";
+      g.beginPath(); g.arc(c + dx, c + dz, 8 + talk * 7, 0, 7); g.fill();
+      g.fillStyle = "#e8f0ee"; g.font = "20px sans-serif"; g.fillText(n, c + dx, c + dz - 16);
+    }
+    const yaw = (me.yaw * Math.PI) / 180, fx = -Math.sin(yaw), fz = Math.cos(yaw);
+    g.fillStyle = "#e8f0ee";
+    g.beginPath(); g.arc(c, c, 8, 0, 7); g.fill();
+    g.strokeStyle = "#e8f0ee"; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(c, c); g.lineTo(c + fx * 26, c + fz * 26); g.stroke();
+  }
+  connect();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
