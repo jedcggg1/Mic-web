@@ -61,7 +61,11 @@ mcWss.on("connection", (mc) => {
   const ask = (cmd) => new Promise((resolve) => send(cmd, resolve));
   const victims = async (cmd) => {
     const b = await ask(cmd);
-    return b.statusCode === 0 && Array.isArray(b.victim) ? b.victim : [];
+    if (process.env.DEBUG) console.log("[cmd]", cmd, "->", JSON.stringify(b).slice(0, 300));
+    if (Number(b.statusCode) !== 0) return [];
+    if (Array.isArray(b.victim)) return b.victim;
+    const m = /^Found (.+)$/.exec(String(b.statusMessage || ""));
+    return m ? m[1].split(",").map((x) => x.trim()).filter(Boolean) : [];
   };
 
   // ผู้เล่นพิมพ์ !link ในแชต -> สร้างรหัส 6 หลัก แล้วส่งกลับให้เฉพาะคนนั้น
@@ -96,7 +100,12 @@ mcWss.on("connection", (mc) => {
   });
 
   async function pollRoster() {
-    const all = await victims("testfor @a");
+    let all = await victims("testfor @a");
+    if (!all.length) { // สำรอง: ใช้คำสั่ง list
+      const b = await ask("list");
+      if (process.env.DEBUG) console.log("[cmd] list ->", JSON.stringify(b).slice(0, 300));
+      if (b.players) all = String(b.players).split(",").map((x) => x.trim()).filter(Boolean);
+    }
     const onList = await victims("testfor @a[tag=mic_on]");
     const onSet = new Set(onList);
     const rangeOf = {};
@@ -114,6 +123,7 @@ mcWss.on("connection", (mc) => {
     for (const name of Object.keys(players)) {
       const safe = name.replace(/"/g, "");
       const b = await ask(`querytarget @a[name="${safe}"]`);
+      if (process.env.DEBUG) console.log("[cmd] querytarget ->", JSON.stringify(b).slice(0, 300));
       if (b.statusCode !== 0 || !b.details) continue;
       try {
         const d = JSON.parse(b.details)[0];
