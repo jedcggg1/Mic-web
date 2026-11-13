@@ -21,16 +21,20 @@
   body { min-height: 100vh; display: grid; place-items: start center; padding: 20px 14px 40px; }
   main { width: min(960px, 100%); display: grid; gap: 18px; grid-template-columns: 1fr; }
   @media (min-width: 820px) { main { grid-template-columns: 1.1fr 1fr; align-items: start; } header { grid-column: 1 / -1; } }
+
   header h1 { margin: 0; font-size: 1.7rem; font-weight: 700; letter-spacing: .01em; }
   header p { margin: 4px 0 0; color: var(--muted); font-size: .95rem; }
   .status { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: .9rem; color: var(--muted); }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--coral); }
   .dot.ok { background: #6fd08c; }
+
   .radar-wrap { background: var(--sea); border: 1px solid var(--line); border-radius: 14px; padding: 10px; }
   canvas { width: 100%; aspect-ratio: 1; display: block; border-radius: 8px; }
+
   .side { display: grid; gap: 16px; }
   .box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
   .box h2 { margin: 0 0 10px; font-size: 1rem; font-weight: 600; }
+
   label { font-size: .88rem; color: var(--muted); display: block; margin-bottom: 6px; }
   .row { display: flex; gap: 8px; }
   input[type=text] { flex: 1; min-width: 0; background: var(--deep); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 10px 12px; font: inherit; }
@@ -38,12 +42,15 @@
   button:disabled { opacity: .5; cursor: default; }
   button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
   :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .chip { background: var(--deep); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 4px 12px; font-size: .85rem; font-weight: 500; }
   .err { color: var(--coral); font-size: .88rem; margin-top: 8px; min-height: 1.2em; }
+
   .me-state { display: flex; align-items: center; gap: 12px; }
   .me-state .big { font-size: 1.3rem; font-weight: 700; }
   .me-state small { color: var(--muted); display: block; font-weight: 400; font-size: .85rem; }
+
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
   li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 9px 0; border-top: 1px solid var(--line); }
   li:first-child { border-top: 0; }
@@ -52,6 +59,7 @@
   li .bar { grid-column: 1 / -1; height: 4px; background: var(--deep); border-radius: 2px; overflow: hidden; }
   li .bar i { display: block; height: 100%; width: 0; background: var(--amber); }
   li.muted .n { color: var(--muted); }
+  li.talking .n { color: var(--amber); }
   .empty { color: var(--muted); font-size: .9rem; }
   .hint { color: var(--muted); font-size: .82rem; line-height: 1.5; }
   .hidden { display: none; }
@@ -64,13 +72,15 @@
     <p>เสียงเบา-ดังตามระยะในเกม เปิด/ปิดไมค์และปรับวงด้วยไอเท็มไมโครโฟน</p>
     <div class="status"><span class="dot" id="srvDot"></span><span id="srvText">กำลังเชื่อมต่อเซิร์ฟเวอร์…</span></div>
   </header>
+
   <section class="radar-wrap" aria-label="แผนที่ระยะเสียง">
     <canvas id="radar" width="640" height="640"></canvas>
   </section>
+
   <div class="side">
     <section class="box" id="joinBox">
       <h2>เข้าร่วมห้องเสียง</h2>
-      <label for="code">พิมพ์ !link ในแชตเกม แล้วนำรหัส 6 หลักมากรอกที่นี่</label>
+      <label for="code">ในเกม: ถือไมโครโฟน กดใช้ แล้วเลือก "รับรหัสเชื่อมเว็บ" นำรหัส 6 หลักมากรอกที่นี่</label>
       <div class="row">
         <input type="text" id="code" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="รหัส 6 หลัก">
         <button id="joinBtn">เข้าร่วม</button>
@@ -78,25 +88,33 @@
       <div class="err" id="err"></div>
       <p class="hint">เบราว์เซอร์จะขอสิทธิ์ใช้ไมค์ ต้องเปิดผ่าน https หรือ localhost เท่านั้น</p>
     </section>
+
     <section class="box hidden" id="meBox">
       <h2>ไมค์ของคุณ</h2>
-      <div class="me-state"><div class="big" id="meText">—</div></div>
+      <div class="me-state">
+        <div class="big" id="meText">—</div>
+      </div>
       <p class="hint">กดไอเท็มไมโครโฟนในเกมเพื่อเปิด/ปิดและปรับวงไมค์</p>
     </section>
+
     <section class="box">
       <h2>ผู้เล่นในเกม</h2>
       <ul id="list"></ul>
-      <div class="empty" id="empty">ยังไม่มีผู้เล่น — โฮสต์ต้องพิมพ์ /connect ในเกม</div>
+      <div class="empty" id="empty">ยังไม่มีผู้เล่น — รอเซิร์ฟเวอร์เกมส่งข้อมูลมา</div>
     </section>
   </div>
 </main>
+
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
   const ICE = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
   let ws, state = { mcOnline: false, players: {} };
   let myName = null, myId = null, token = null, stream = null, ctx = null;
-  const peers = new Map();
+  const peers = new Map(); // id -> { name, pc, src, an, gain, panner, level }
+
+  // ที่อยู่ backend: ใส่ได้ทาง ?server=ชื่อโดเมน (เช่น Vercel + Cloudflare Tunnel)
   function wsUrl() {
     const qs = new URLSearchParams(location.search);
     let server = qs.get("server") || "";
@@ -105,10 +123,12 @@
       else server = localStorage.getItem("mic_server") || "";
     } catch {}
     if (!server) return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/web`;
-    server = server.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
-    if (!/^wss?:\/\//.test(server)) server = "wss://" + server;
-    return server.replace(/\/+$/, "") + "/web";
+    server = server.replace(/^https:///, "wss://").replace(/^http:///, "ws://");
+    if (!/^wss?:///.test(server)) server = "wss://" + server;
+    return server.replace(//+$/, "") + "/web";
   }
+
+  // ---------- เชื่อมเซิร์ฟเวอร์ ----------
   function connect() {
     ws = new WebSocket(wsUrl());
     ws.onopen = () => { setSrv(true); if (token) ws.send(JSON.stringify({ type: "join", resume: token })); };
@@ -118,8 +138,9 @@
   function setSrv(ok) {
     $("srvDot").className = "dot" + (ok && state.mcOnline ? " ok" : "");
     $("srvText").textContent = !ok ? "ต่อเซิร์ฟเวอร์ไม่ได้ กำลังลองใหม่…"
-      : state.mcOnline ? "เชื่อมกับ Minecraft แล้ว" : "เซิร์ฟเวอร์พร้อม แต่ Minecraft ยังไม่ได้ /connect";
+      : state.mcOnline ? "เชื่อมกับ Minecraft แล้ว" : "เซิร์ฟเวอร์พร้อม แต่ยังไม่ได้รับข้อมูลจากเกม (เช็กแอดออนไมค์บน BDS)";
   }
+
   async function onMsg(m) {
     if (m.type === "state") { state = m; setSrv(true); render(); applyAudio(); }
     else if (m.type === "join-error") {
@@ -128,14 +149,17 @@
     }
     else if (m.type === "welcome") {
       myId = m.id; myName = m.name; token = m.token;
+      startLocalMeter();
       peers.forEach((p) => p.pc.close()); peers.clear();
       $("joinBox").classList.add("hidden"); $("meBox").classList.remove("hidden");
       for (const p of m.peers) await callPeer(p.id, p.name);
     }
-    else if (m.type === "peer-joined") makePeer(m.id, m.name);
-    else if (m.type === "peer-left") dropPeer(m.id);
-    else if (m.type === "signal") await onSignal(m.from, m.data);
+    else if (m.type === "peer-joined") { makePeer(m.id, m.name); }
+    else if (m.type === "peer-left") { dropPeer(m.id); }
+    else if (m.type === "signal") { await onSignal(m.from, m.data); }
   }
+
+  // ---------- เข้าร่วม + ไมค์ ----------
   $("joinBtn").onclick = async () => {
     const code = $("code").value.trim();
     if (!/^\d{6}$/.test(code)) { $("err").textContent = "ใส่รหัส 6 หลักที่ได้จากเกม"; return; }
@@ -151,6 +175,8 @@
     await ctx.resume();
     ws.send(JSON.stringify({ type: "join", code }));
   };
+
+  // ---------- WebRTC ----------
   function makePeer(id, name) {
     if (peers.has(id)) return peers.get(id);
     const pc = new RTCPeerConnection(ICE);
@@ -160,7 +186,7 @@
     pc.onicecandidate = (e) => e.candidate && sig(id, { candidate: e.candidate });
     pc.ontrack = (e) => {
       const s = e.streams[0];
-      const keep = new Audio(); keep.srcObject = s; keep.muted = true;
+      const keep = new Audio(); keep.srcObject = s; keep.muted = true; // ให้ Chrome ปล่อยสตรีมเข้า WebAudio
       const src = ctx.createMediaStreamSource(s);
       const gain = ctx.createGain(); gain.gain.value = 0;
       const panner = ctx.createPanner();
@@ -195,11 +221,41 @@
   }
   const sig = (to, data) => ws.send(JSON.stringify({ type: "signal", to, data }));
   function dropPeer(id) { const p = peers.get(id); if (p) { p.pc.close(); peers.delete(id); } }
+
+  // ---------- ตรวจว่าเรากำลังพูดไหม แล้วบอกเซิร์ฟเวอร์ ----------
+  let meter = null, speakingNow = false, lastLoud = 0, lastSend = 0;
+  function startLocalMeter() {
+    if (meter || !stream || !ctx) return;
+    const src = ctx.createMediaStreamSource(stream);
+    const an = ctx.createAnalyser(); an.fftSize = 512; src.connect(an);
+    const buf = new Uint8Array(an.fftSize);
+    meter = setInterval(() => {
+      const me = state.players[myName];
+      const live = !!(me && me.on);
+      let loud = false;
+      if (live) {
+        an.getByteTimeDomainData(buf);
+        let m = 0; for (const v of buf) m = Math.max(m, Math.abs(v - 128));
+        loud = m / 128 > 0.06;
+      }
+      const now = performance.now();
+      if (loud) lastLoud = now;
+      const talking = live && now - lastLoud < 500;
+      if (talking !== speakingNow || (talking && now - lastSend > 1000)) {
+        speakingNow = talking; lastSend = now;
+        if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "speaking", on: talking }));
+      }
+    }, 100);
+  }
+
+  // ---------- เสียงตามตำแหน่ง ----------
   const setP = (param, v) => param.setTargetAtTime(v, ctx.currentTime, 0.05);
+
   function applyAudio() {
     if (!ctx || !myName) return;
     const me = state.players[myName];
     if (stream) stream.getAudioTracks().forEach((t) => (t.enabled = !!(me && me.on)));
+
     if (me) {
       const L = ctx.listener, yaw = (me.yaw * Math.PI) / 180;
       const fx = -Math.sin(yaw), fz = Math.cos(yaw);
@@ -220,26 +276,37 @@
       }
     }
   }
+
+  // ---------- UI ----------
   function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z); }
+
   function render() {
     const names = Object.keys(state.players);
     const me = myName && state.players[myName];
+
     $("empty").classList.toggle("hidden", names.length > 0);
     const ul = $("list"); ul.innerHTML = "";
     names.forEach((n) => {
       const p = state.players[n];
       const li = document.createElement("li");
-      if (!p.on) li.className = "muted";
+      const talking = (state.speaking || []).includes(n);
+      if (!p.on) li.className = "muted"; else if (talking) li.className = "talking";
       const d = me && n !== myName ? ` · ห่าง ${distance(me, p).toFixed(0)} บล็อก` : "";
       li.innerHTML = `<span class="n"></span><span class="m"></span><div class="bar"><i data-n="${encodeURIComponent(n)}"></i></div>`;
       li.querySelector(".n").textContent = (n === myName ? "คุณ · " : "") + n;
-      li.querySelector(".m").textContent = (p.on ? `ไมค์เปิด ${p.range} บล็อก` : "ไมค์ปิด") + d;
+      li.querySelector(".m").textContent = (p.on ? (talking ? "กำลังพูด · " : "") + `ไมค์เปิด ${p.range} บล็อก` : "ไมค์ปิด") + d;
       ul.appendChild(li);
     });
-    if (myName) $("meText").textContent = me ? (me.on ? `เปิดไมค์ · วง ${me.range} บล็อก` : "ปิดไมค์") : "ไม่พบคุณในเกม";
+
+    if (myName) {
+      $("meText").textContent = me ? (me.on ? `เปิดไมค์ · วง ${me.range} บล็อก` : "ปิดไมค์") : "ไม่พบคุณในเกม";
+    }
   }
+
+  // ระดับเสียง + เรดาร์ (วาดทุกเฟรม)
   const cv = $("radar"), g = cv.getContext("2d");
-  const VIEW = 72;
+  const VIEW = 72; // บล็อกจากกึ่งกลางถึงขอบ
+
   function frame() {
     for (const peer of peers.values()) {
       if (!peer.an) continue;
@@ -256,25 +323,33 @@
     drawRadar();
     requestAnimationFrame(frame);
   }
+
   function drawRadar() {
     const W = cv.width, c = W / 2, R = c - 14, k = R / VIEW;
     g.clearRect(0, 0, W, W);
     g.fillStyle = "#0e2830"; g.fillRect(0, 0, W, W);
     g.font = "20px sans-serif"; g.textAlign = "center";
+
+    // วงระยะ
     g.strokeStyle = "#25505c"; g.lineWidth = 1.5; g.fillStyle = "#84a9ad";
     [16, 32, 48, 64].forEach((r) => {
       g.beginPath(); g.arc(c, c, r * k, 0, 7); g.stroke();
       g.fillText(r, c, c - r * k - 5);
     });
     g.beginPath(); g.moveTo(c, c - R); g.lineTo(c, c + R); g.moveTo(c - R, c); g.lineTo(c + R, c); g.stroke();
+
     const me = myName && state.players[myName];
     if (!me) {
       g.fillStyle = "#84a9ad"; g.font = "22px sans-serif";
       g.fillText(myName ? "ไม่พบคุณในเกม" : "เข้าร่วมเพื่อดูแผนที่", c, c + 8);
       return;
     }
+
+    // วงไมค์ของเรา
     g.fillStyle = "rgba(244,185,66,.07)"; g.strokeStyle = "rgba(244,185,66,.55)"; g.setLineDash([8, 6]);
     g.beginPath(); g.arc(c, c, Math.min(me.range * k, R), 0, 7); g.fill(); g.stroke(); g.setLineDash([]);
+
+    // ผู้เล่นอื่น (บนสุดของแผนที่ = ทิศเหนือ -Z)
     for (const [n, p] of Object.entries(state.players)) {
       if (n === myName || p.dim !== me.dim) continue;
       let dx = (p.x - me.x) * k, dz = (p.z - me.z) * k;
@@ -283,7 +358,8 @@
       const dist = distance(me, p);
       const heard = p.on && dist < p.range;
       const peer = [...peers.values()].find((q) => q.name === n);
-      const talk = heard && peer ? Math.min(1, peer.level * 4) : 0;
+      const talk = heard && (state.speaking || []).includes(n) ? 1 : 0;
+
       if (p.on) {
         g.strokeStyle = heard ? "rgba(244,185,66,.5)" : "rgba(132,169,173,.35)"; g.lineWidth = 1.5;
         g.beginPath(); g.arc(c + dx, c + dz, Math.min(p.range * k, R), 0, 7); g.stroke();
@@ -292,12 +368,15 @@
       g.beginPath(); g.arc(c + dx, c + dz, 8 + talk * 7, 0, 7); g.fill();
       g.fillStyle = "#e8f0ee"; g.font = "20px sans-serif"; g.fillText(n, c + dx, c + dz - 16);
     }
+
+    // เรา + ทิศที่หัน
     const yaw = (me.yaw * Math.PI) / 180, fx = -Math.sin(yaw), fz = Math.cos(yaw);
     g.fillStyle = "#e8f0ee";
     g.beginPath(); g.arc(c, c, 8, 0, 7); g.fill();
     g.strokeStyle = "#e8f0ee"; g.lineWidth = 3;
     g.beginPath(); g.moveTo(c, c); g.lineTo(c + fx * 26, c + fz * 26); g.stroke();
   }
+
   connect();
   requestAnimationFrame(frame);
 })();
